@@ -1,0 +1,188 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                  String      @id @default(uuid())
+  email               String      @unique
+  xp                  Int
+  profileDescription  String?     @map("profile_description")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  avatarId            Int         @map("avatar_id")
+  name                String
+  lastLoginAt         DateTime?   @map("last_login_at")
+
+  userAuth            UserAuth[]
+  userRecipes         UserRecipes[]
+  @@map("users")
+}
+
+enum Provider {
+  GOOGLE
+  LOCAL
+}
+
+model UserAuth {
+  id                 String      @id @default(uuid())
+  provider           Provider
+  providerId         String?     @map("provider_id")
+  password           String?
+  createdAt          DateTime    @default(now()) @map("created_at")
+  userId             String      @map("user_id")
+
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_auth")
+}
+
+enum Difficulty {
+  FACIL
+  MEDIO
+  DIFICIL
+}
+
+model Recipes {
+  id                 String      @id @default(uuid())
+  title              String
+  description        String?
+  imageUrl           String?     @map("image_url")
+  difficulty         Difficulty
+  prepTime           Int         @map("prep_time")
+  servings           Int
+  isFeatured         Boolean     @default(false) @map("is_featured")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  userRecipes        UserRecipes[]
+  recipeSteps        RecipeSteps[]
+  recipeIngredients  RecipeIngredients[]
+  @@map("recipes")
+}
+
+model UserRecipes{
+  id                 String      @id @default(uuid())
+  userId             String      @map("user_id")
+  recipeId           String      @map("recipe_id")
+  createdAt          DateTime    @default(now()) @map("created_at")
+
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipes            Recipes     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  @@map("user_recipes")
+}
+
+model RecipeSteps {
+  id                String       @id @default(uuid())
+  stepNumber        Int          @map("step_number")
+  description       String
+  createdAt         DateTime     @default(now()) @map("created_at")
+  recipeId          String       @map("recipe_id")
+
+  recipes           Recipes     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_steps")
+}
+
+model MeasureTypes {
+  id               String         @id @default(uuid())
+  type             String
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  measureUnits     MeasureUnits[]
+  @@map("measure_types")
+}
+
+model MeasureUnits {
+  id               String         @id @default(uuid())
+  name             String
+  abbreviation     String
+  createdAt        DateTime       @default(now()) @map("created_at")
+  measureTypesId   String         @map("measure_types_id")
+
+  measureTypes     MeasureTypes   @relation(fields: [measureTypesId], references: [id], onDelete: Cascade)
+
+  ingredients      Ingredients[]
+  ingredientUnits  IngredientUnits[]
+  @@map("measure_units")
+}
+
+model Ingredients {
+  id               String         @id @default(uuid())
+  name             String
+  createdAt        DateTime       @default(now())  @map("created_at")
+  measureUnitsId   String         @map("measure_units_id")
+
+  measureUnits      MeasureUnits   @relation(fields: [measureUnitsId], references: [id], onDelete: Cascade)
+  nutrictionFacts   NutrictionFacts[]
+  ingredientUnits   IngredientUnits[]
+  recipeIngredients RecipeIngredients[]
+  @@map("ingredients")
+}
+
+model NutrictionFacts {
+  id               String         @id @default(uuid())
+  ingredientId     String         @map("ingredient_id")
+  referenceAmount  Decimal
+  referenceUnitId  String         @map("reference_unit_id")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  calories         String
+  proteinG         String?         @map("protein_g")
+  carbsG           String?         @map("carbs_g")
+  fatG             String?         @map("fat_g")
+  saturedFatG      String?         @map("satured_fat_g")
+  transFagG        String?         @map("trans_fat_g")
+  fiberG           String?         @map("fiber_g")
+  sugarG           String?         @map("sugar_g")
+  sodiumMg         String?         @map("sodium_mg")
+  potassiumMg      String?         @map("potassium_mg")
+  cholesterolMg    String?         @map("cholesterol_mg")
+  vitaminAMg       String?         @map("vitamin_a_mg")
+  vitaminCMg       String?         @map("vitamin_c_mg")
+  calciumMg        String?         @map("calcium_mg")
+  ironMg           String?         @map("iron_mg")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+
+  ingredientUnits  IngredientUnits @relation(fields: [referenceUnitId], references: [id], onDelete: Cascade)
+  ingredients      Ingredients     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  @@map("nutriction_facts")
+}
+
+model IngredientUnits {
+  id               String         @id @default(uuid())
+  ingredientId     String         @map("ingredient_id")
+  measureUnitsId   String         @map("measure_units_id")
+  gramsEquivalent  Decimal        @map("grams_equivalent")
+  createdAt        DateTime       @default(now()) @map("created_at")
+
+  measureUnits     MeasureUnits   @relation(fields: [measureUnitsId], references: [id], onDelete: Cascade)
+  ingredients      Ingredients    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  nutrictionFacts  NutrictionFacts[]
+  @@map("ingredient_units")
+}
+
+model RecipeIngredients {
+  id               String         @id @default(uuid())
+  amount           Decimal
+  note             String?        @db.Text
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+  ingredientId     String         @map("ingredient_id")
+  recipeId         String         @map("recipe_id")
+
+  ingredients      Ingredients    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  recipes           Recipes     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@map("recipe_ingredients")
+}
