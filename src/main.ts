@@ -19,6 +19,7 @@ async function bootstrap() {
     .setDescription('Documentação da API do Cookingtop')
     .setVersion('1.0')
     .addTag('cookingtop')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document)

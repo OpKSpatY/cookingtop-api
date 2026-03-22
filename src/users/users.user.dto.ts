@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsEmail, MinLength } from 'class-validator';
+import { IsNotEmpty, IsEmail, MinLength, IsOptional, IsInt, IsString, MaxLength } from 'class-validator';
 
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -28,6 +28,19 @@ export class CreateUserDto {
   @MinLength(6, { message: 'Senha deve ter no mínimo 6 caracteres' })
   password: string;
 }
+export class UpdateUserDto {
+  @ApiProperty({ example: 1, description: 'ID do avatar selecionado', required: false })
+  @IsOptional()
+  @IsInt({ message: 'avatarId deve ser um número inteiro' })
+  avatarId?: number;
+
+  @ApiProperty({ example: 'Amo cozinhar receitas caseiras!', description: 'Descrição do perfil', required: false })
+  @IsOptional()
+  @IsString({ message: 'profileDescription deve ser um texto' })
+  @MaxLength(500, { message: 'profileDescription deve ter no máximo 500 caracteres' })
+  profileDescription?: string | null;
+}
+
 export class UpdatePasswordDto {
   @ApiProperty()
   @IsNotEmpty({ message: 'Nova senha é obrigatória' })

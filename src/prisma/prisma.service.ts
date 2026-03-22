@@ -1,9 +1,16 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleInit,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { PrismaClient } from '../../generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
+
   constructor() {
     const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
     if (!connectionString) {
@@ -16,10 +23,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+      this.logger.log('Conexão com o banco de dados estabelecida');
+    } catch (error) {
+      this.logger.error(
+        'Falha ao conectar ao banco de dados',
+        error instanceof Error ? error.stack : error,
+      );
+      throw error;
+    }
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
+    try {
+      await this.$disconnect();
+      this.logger.log('Conexão com o banco de dados encerrada');
+    } catch (error) {
+      this.logger.error(
+        'Erro ao encerrar conexão com o banco de dados',
+        error instanceof Error ? error.stack : error,
+      );
+      throw error;
+    }
   }
 }

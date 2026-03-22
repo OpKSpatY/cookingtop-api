@@ -27,7 +27,28 @@ model User {
 
   userAuth            UserAuth[]
   userRecipes         UserRecipes[]
+  userRoles           UserRoles[]
   @@map("users")
+}
+
+model Roles {
+  id                  String      @id @default(uuid())
+  name                String     @unique
+  createdAt           DateTime   @default(now()) @map("created_at")
+
+  users     UserRoles[]
+  @@map("roles")
+}
+
+model UserRoles {
+  id                  String      @id @default(uuid())
+  userId              String      @map("user_id")
+  roleId              String      @map("role_id")
+  createdAt           DateTime    @default(now()) @map("created_at")
+
+  user    User @relation(fields: [userId], references: [id])
+  role    Roles @relation(fields: [roleId], references: [id])
+  @@map("user_roles")
 }
 
 enum Provider {
@@ -121,6 +142,7 @@ model Ingredients {
   name             String
   createdAt        DateTime       @default(now())  @map("created_at")
   measureUnitsId   String         @map("measure_units_id")
+  imageUrl         String?         @map("image_url")
 
   measureUnits      MeasureUnits   @relation(fields: [measureUnitsId], references: [id], onDelete: Cascade)
   nutrictionFacts   NutrictionFacts[]
