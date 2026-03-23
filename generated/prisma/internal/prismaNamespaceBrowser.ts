@@ -52,6 +52,8 @@ export const AnyNull = runtime.AnyNull
 
 export const ModelName = {
   User: 'User',
+  Roles: 'Roles',
+  UserRoles: 'UserRoles',
   UserAuth: 'UserAuth',
   Recipes: 'Recipes',
   UserRecipes: 'UserRecipes',
@@ -59,9 +61,13 @@ export const ModelName = {
   MeasureTypes: 'MeasureTypes',
   MeasureUnits: 'MeasureUnits',
   Ingredients: 'Ingredients',
+  UserIngredients: 'UserIngredients',
   NutrictionFacts: 'NutrictionFacts',
   IngredientUnits: 'IngredientUnits',
-  RecipeIngredients: 'RecipeIngredients'
+  RecipeIngredients: 'RecipeIngredients',
+  UserFavoriteRecipes: 'UserFavoriteRecipes',
+  UserShoppingList: 'UserShoppingList',
+  UserSavedShoppingList: 'UserSavedShoppingList'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -95,6 +101,25 @@ export const UserScalarFieldEnum = {
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
 
 
+export const RolesScalarFieldEnum = {
+  id: 'id',
+  name: 'name',
+  createdAt: 'createdAt'
+} as const
+
+export type RolesScalarFieldEnum = (typeof RolesScalarFieldEnum)[keyof typeof RolesScalarFieldEnum]
+
+
+export const UserRolesScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  roleId: 'roleId',
+  createdAt: 'createdAt'
+} as const
+
+export type UserRolesScalarFieldEnum = (typeof UserRolesScalarFieldEnum)[keyof typeof UserRolesScalarFieldEnum]
+
+
 export const UserAuthScalarFieldEnum = {
   id: 'id',
   provider: 'provider',
@@ -116,7 +141,9 @@ export const RecipesScalarFieldEnum = {
   prepTime: 'prepTime',
   servings: 'servings',
   isFeatured: 'isFeatured',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  isPrivate: 'isPrivate',
+  ownerId: 'ownerId'
 } as const
 
 export type RecipesScalarFieldEnum = (typeof RecipesScalarFieldEnum)[keyof typeof RecipesScalarFieldEnum]
@@ -167,10 +194,22 @@ export const IngredientsScalarFieldEnum = {
   id: 'id',
   name: 'name',
   createdAt: 'createdAt',
-  measureUnitsId: 'measureUnitsId'
+  measureUnitsId: 'measureUnitsId',
+  imageUrl: 'imageUrl'
 } as const
 
 export type IngredientsScalarFieldEnum = (typeof IngredientsScalarFieldEnum)[keyof typeof IngredientsScalarFieldEnum]
+
+
+export const UserIngredientsScalarFieldEnum = {
+  id: 'id',
+  ingredientId: 'ingredientId',
+  userId: 'userId',
+  createdAt: 'createdAt',
+  quantity: 'quantity'
+} as const
+
+export type UserIngredientsScalarFieldEnum = (typeof UserIngredientsScalarFieldEnum)[keyof typeof UserIngredientsScalarFieldEnum]
 
 
 export const NutrictionFactsScalarFieldEnum = {
@@ -224,12 +263,50 @@ export const RecipeIngredientsScalarFieldEnum = {
 export type RecipeIngredientsScalarFieldEnum = (typeof RecipeIngredientsScalarFieldEnum)[keyof typeof RecipeIngredientsScalarFieldEnum]
 
 
+export const UserFavoriteRecipesScalarFieldEnum = {
+  id: 'id',
+  recipeId: 'recipeId',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type UserFavoriteRecipesScalarFieldEnum = (typeof UserFavoriteRecipesScalarFieldEnum)[keyof typeof UserFavoriteRecipesScalarFieldEnum]
+
+
+export const UserShoppingListScalarFieldEnum = {
+  id: 'id',
+  items: 'items',
+  userId: 'userId',
+  createdAt: 'createdAt',
+  shareCode: 'shareCode'
+} as const
+
+export type UserShoppingListScalarFieldEnum = (typeof UserShoppingListScalarFieldEnum)[keyof typeof UserShoppingListScalarFieldEnum]
+
+
+export const UserSavedShoppingListScalarFieldEnum = {
+  id: 'id',
+  items: 'items',
+  userId: 'userId',
+  createdAt: 'createdAt'
+} as const
+
+export type UserSavedShoppingListScalarFieldEnum = (typeof UserSavedShoppingListScalarFieldEnum)[keyof typeof UserSavedShoppingListScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
@@ -246,4 +323,13 @@ export const NullsOrder = {
 } as const
 
 export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
+
+
+export const JsonNullValueFilter = {
+  DbNull: DbNull,
+  JsonNull: JsonNull,
+  AnyNull: AnyNull
+} as const
+
+export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
 

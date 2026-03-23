@@ -25,9 +25,14 @@ model User {
   name                String
   lastLoginAt         DateTime?   @map("last_login_at")
 
-  userAuth            UserAuth[]
-  userRecipes         UserRecipes[]
-  userRoles           UserRoles[]
+  userAuth              UserAuth[]
+  userRecipes           UserRecipes[]
+  userRoles             UserRoles[]
+  userIngredients       UserIngredients[]
+  userFavoriteRecipes   UserFavoriteRecipes[]
+  userSavedShoppingList UserSavedShoppingList[]
+  userShoppingList      UserShoppingList[]
+  ownedRecipes          Recipes[]
   @@map("users")
 }
 
@@ -75,19 +80,24 @@ enum Difficulty {
 }
 
 model Recipes {
-  id                 String      @id @default(uuid())
-  title              String
-  description        String?
-  imageUrl           String?     @map("image_url")
-  difficulty         Difficulty
-  prepTime           Int         @map("prep_time")
-  servings           Int
-  isFeatured         Boolean     @default(false) @map("is_featured")
-  createdAt          DateTime    @default(now()) @map("created_at")
+  id                  String      @id @default(uuid())
+  title               String
+  description         String?
+  imageUrl            String?     @map("image_url")
+  difficulty          Difficulty
+  prepTime            Int         @map("prep_time")
+  servings            Int
+  isFeatured          Boolean     @default(false) @map("is_featured")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  isPrivate           Boolean     @default(false) @map("is_private")
+  ownerId             String      @map("owner_id")
 
-  userRecipes        UserRecipes[]
-  recipeSteps        RecipeSteps[]
-  recipeIngredients  RecipeIngredients[]
+  userRecipes         UserRecipes[]
+  recipeSteps         RecipeSteps[]
+  recipeIngredients   RecipeIngredients[]
+  userFavoriteRecipes UserFavoriteRecipes[]
+
+  owner               User           @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   @@map("recipes")
 }
 
@@ -148,7 +158,20 @@ model Ingredients {
   nutrictionFacts   NutrictionFacts[]
   ingredientUnits   IngredientUnits[]
   recipeIngredients RecipeIngredients[]
+  userIngredients   UserIngredients[]
   @@map("ingredients")
+}
+
+model UserIngredients {
+  id                 String         @id @default(uuid())
+  ingredientId       String         @map("ingredient_id")
+  userId             String         @map("user_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  quantity           String
+
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ingredients        Ingredients    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  @@map("user_ingredients")
 }
 
 model NutrictionFacts {
@@ -207,4 +230,36 @@ model RecipeIngredients {
   recipes           Recipes     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
 
   @@map("recipe_ingredients")
+}
+
+model UserFavoriteRecipes {
+  id                 String         @id @default(uuid())
+  recipeId           String         @map("recipe_id")
+  userId             String         @map("user_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipes            Recipes    @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  @@map("user_favorite_recipes")
+}
+
+model UserShoppingList {
+  id                 String         @id @default(uuid())
+  items              Json
+  userId             String         @map("user_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  shareCode          String
+
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_shopping_list")
+}
+
+model UserSavedShoppingList {
+  id                 String         @id @default(uuid())
+  items              Json
+  userId             String         @map("user_id")
+  createdAt          DateTime       @default(now()) @map("created_at")
+
+  user               User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@map("user_saved_shopping_list")
 }

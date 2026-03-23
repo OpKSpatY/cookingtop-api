@@ -1,0 +1,19 @@
+/*
+  Warnings:
+
+  - You are about to drop the column `isPrivate` on the `recipes` table. All the data in the column will be lost.
+  - You are about to drop the column `ownerId` on the `recipes` table. All the data in the column will be lost.
+  - Added the required column `owner_id` to the `recipes` table without a default value. This is not possible if the table is not empty.
+
+*/
+-- DropForeignKey
+ALTER TABLE "recipes" DROP CONSTRAINT "recipes_ownerId_fkey";
+
+-- AlterTable
+ALTER TABLE "recipes" DROP COLUMN "isPrivate",
+DROP COLUMN "ownerId",
+ADD COLUMN     "is_private" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN     "owner_id" TEXT NOT NULL;
+
+-- AddForeignKey
+ALTER TABLE "recipes" ADD CONSTRAINT "recipes_owner_id_fkey" FOREIGN KEY ("owner_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;

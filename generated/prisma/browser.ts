@@ -23,6 +23,16 @@ export * from './enums.js';
  */
 export type User = Prisma.UserModel
 /**
+ * Model Roles
+ * 
+ */
+export type Roles = Prisma.RolesModel
+/**
+ * Model UserRoles
+ * 
+ */
+export type UserRoles = Prisma.UserRolesModel
+/**
  * Model UserAuth
  * 
  */
@@ -58,6 +68,11 @@ export type MeasureUnits = Prisma.MeasureUnitsModel
  */
 export type Ingredients = Prisma.IngredientsModel
 /**
+ * Model UserIngredients
+ * 
+ */
+export type UserIngredients = Prisma.UserIngredientsModel
+/**
  * Model NutrictionFacts
  * 
  */
@@ -72,3 +87,18 @@ export type IngredientUnits = Prisma.IngredientUnitsModel
  * 
  */
 export type RecipeIngredients = Prisma.RecipeIngredientsModel
+/**
+ * Model UserFavoriteRecipes
+ * 
+ */
+export type UserFavoriteRecipes = Prisma.UserFavoriteRecipesModel
+/**
+ * Model UserShoppingList
+ * 
+ */
+export type UserShoppingList = Prisma.UserShoppingListModel
+/**
+ * Model UserSavedShoppingList
+ * 
+ */
+export type UserSavedShoppingList = Prisma.UserSavedShoppingListModel

@@ -18,6 +18,30 @@ export class MeasureUnitsService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Lista unidades de medida (id + name + abbreviation) para selects no frontend.
+   */
+  async findAll(): Promise<
+    Pick<MeasureUnits, 'id' | 'name' | 'abbreviation'>[]
+  > {
+    try {
+      return await this.prisma.measureUnits.findMany({
+        select: {
+          id: true,
+          name: true,
+          abbreviation: true,
+        },
+        orderBy: { name: 'asc' },
+      });
+    } catch (error) {
+      logAndRethrow(
+        this.logger,
+        'Erro ao listar measure units',
+        error,
+      );
+    }
+  }
+
   async create(dto: CreateMeasureUnitDto): Promise<MeasureUnits> {
     try {
       return await this.prisma.measureUnits.create({

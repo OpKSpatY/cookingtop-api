@@ -1,5 +1,6 @@
 import {
   Controller,
+  Get,
   Post,
   Delete,
   Body,
@@ -26,6 +27,16 @@ import { CreateMeasureUnitDto } from './dto/create-measure-unit.dto';
 @UseGuards(AuthGuard('jwt'))
 export class MeasureUnitsController {
   constructor(private readonly measureUnitsService: MeasureUnitsService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Listar unidades de medida (id, name, abbreviation)',
+  })
+  @ApiResponse({ status: 200, description: 'Lista de unidades de medida' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async findAll() {
+    return this.measureUnitsService.findAll();
+  }
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
