@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   Injectable,
   Logger,
@@ -12,12 +13,41 @@ import {
   isPrismaKnownRequestError,
   logAndRethrow,
 } from '../common/utils/service-error.util';
+import { formatStrongEtag } from '../common/utils/conditional-request.util';
 
 @Injectable()
 export class IngredientsService {
   private readonly logger = new Logger(IngredientsService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * ETag do catálogo: muda quando ingredientes ou unidades de medida exibidas mudam.
+   */
+  async getIngredientsCatalogEtag(): Promise<string> {
+    const [ingAgg, measureUnitsRows] = await Promise.all([
+      this.prisma.ingredients.aggregate({
+        _count: true,
+        _max: { updatedAt: true, createdAt: true },
+      }),
+      this.prisma.measureUnits.findMany({
+        select: { id: true, name: true, abbreviation: true },
+        orderBy: { id: 'asc' },
+      }),
+    ]);
+
+    const fingerprint = JSON.stringify({
+      ingredientsCount: ingAgg._count,
+      ingredientsMaxUpdatedAt:
+        ingAgg._max.updatedAt?.toISOString() ?? null,
+      ingredientsMaxCreatedAt:
+        ingAgg._max.createdAt?.toISOString() ?? null,
+      measureUnits: measureUnitsRows,
+    });
+
+    const hash = createHash('sha256').update(fingerprint).digest('hex');
+    return formatStrongEtag(hash);
+  }
 
   async findAll() {
     try {
@@ -28,6 +58,7 @@ export class IngredientsService {
           imageUrl: true,
           measureUnitsId: true,
           createdAt: true,
+          updatedAt: true,
           measureUnits: {
             select: {
               id: true,

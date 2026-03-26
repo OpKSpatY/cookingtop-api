@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   Injectable,
   Logger,
@@ -18,6 +19,51 @@ import {
   recipeInclude,
   type RecipeApiResponse,
 } from './recipe-response.mapper';
+import {
+  canMakeRecipeWithPantryTotals,
+  parseUserQuantityString,
+} from './recipe-pantry.util';
+import { formatStrongEtag } from '../common/utils/conditional-request.util';
+
+export type RecipePantryComparisonItem = {
+  recipe_ingredient_id: string;
+  ingredient_id: string;
+  ingredient_name: string;
+  measure_units_id: string;
+  measure_unit: {
+    id: string;
+    name: string;
+    abbreviation: string;
+  };
+  /** Linha em `ingredient_units` com o mesmo `measure_units_id` do ingrediente. */
+  ingredient_unit_id: string | null;
+  required_amount: string;
+  user_quantity_raw: string | null;
+  user_quantity_parsed: number | null;
+  quantity_parse_error: boolean;
+  has_in_pantry: boolean;
+  is_sufficient: boolean;
+  /** Quanto falta na mesma unidade (0 se suficiente ou sem estoque). */
+  shortage_amount: string;
+};
+
+export type RecipePantryComparisonResponse = {
+  recipe_id: string;
+  title: string;
+  items: RecipePantryComparisonItem[];
+  summary: {
+    total_lines: number;
+    lines_with_stock: number;
+    lines_sufficient: number;
+    all_sufficient: boolean;
+  };
+};
+
+/** Receitas visíveis ao usuário, separadas por dá ou não para fazer com a despensa atual. */
+export type RecipesPantryAvailabilityResponse = {
+  can_make: RecipeApiResponse[];
+  cannot_make: RecipeApiResponse[];
+};
 
 @Injectable()
 export class RecipesService {
@@ -111,6 +157,113 @@ export class RecipesService {
     }
   }
 
+  /**
+   * Todas as receitas visíveis ao usuário, em `can_make` ou `cannot_make`
+   * conforme a despensa (`user_ingredients`) cobre as quantidades de `recipe_ingredients`.
+   */
+  /**
+   * Fingerprint barato para validação condicional (ETag) de `pantry-availability`.
+   * Inclui metadados das receitas visíveis, marcas de ingredientes/passos e despensa
+   * (`ingredient_id` + `quantity`) para refletir alterações de quantidade.
+   */
+  async getPantryAvailabilityEtag(userId: string): Promise<string> {
+    const visibility = this.visibilityWhere(userId);
+
+    const [recipesMeta, riAgg, rsAgg, pantryRows] = await Promise.all([
+      this.prisma.recipes.findMany({
+        where: visibility,
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          imageUrl: true,
+          difficulty: true,
+          prepTime: true,
+          servings: true,
+          isFeatured: true,
+          isPrivate: true,
+          createdAt: true,
+          ownerId: true,
+          owner: { select: { id: true, name: true } },
+        },
+        orderBy: { id: 'asc' },
+      }),
+      this.prisma.recipeIngredients.aggregate({
+        where: { recipes: this.visibilityWhere(userId) },
+        _max: { updatedAt: true },
+      }),
+      this.prisma.recipeSteps.aggregate({
+        where: { recipes: this.visibilityWhere(userId) },
+        _max: { createdAt: true },
+      }),
+      this.prisma.userIngredients.findMany({
+        where: { userId },
+        select: { ingredientId: true, quantity: true },
+        orderBy: { ingredientId: 'asc' },
+      }),
+    ]);
+
+    const fingerprint = JSON.stringify({
+      recipes: recipesMeta,
+      recipeIngredientsMaxUpdatedAt: riAgg._max.updatedAt?.toISOString() ?? null,
+      recipeStepsMaxCreatedAt: rsAgg._max.createdAt?.toISOString() ?? null,
+      pantry: pantryRows,
+    });
+
+    const hash = createHash('sha256').update(fingerprint).digest('hex');
+    return formatStrongEtag(hash);
+  }
+
+  async findAllGroupedByPantry(
+    userId: string,
+  ): Promise<RecipesPantryAvailabilityResponse> {
+    try {
+      const rows = await this.prisma.recipes.findMany({
+        where: this.visibilityWhere(userId),
+        include: recipeInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+
+      const userRows = await this.prisma.userIngredients.findMany({
+        where: { userId },
+      });
+
+      const totalsByIngredient = new Map<string, number>();
+      for (const row of userRows) {
+        const parsed = parseUserQuantityString(row.quantity);
+        const add = parsed.value ?? 0;
+        totalsByIngredient.set(
+          row.ingredientId,
+          (totalsByIngredient.get(row.ingredientId) ?? 0) + add,
+        );
+      }
+
+      const can_make: RecipeApiResponse[] = [];
+      const cannot_make: RecipeApiResponse[] = [];
+
+      for (const row of rows) {
+        const ok = canMakeRecipeWithPantryTotals(
+          row.recipeIngredients,
+          totalsByIngredient,
+        );
+        const mapped = mapRecipeToApiResponse(row);
+        if (ok) {
+          can_make.push(mapped);
+        } else {
+          cannot_make.push(mapped);
+        }
+      }
+
+      return { can_make, cannot_make };
+    } catch (error) {
+      logAndRethrow(
+        this.logger,
+        `Erro ao listar receitas por despensa (userId: ${userId})`,
+        error,
+      );
+    }
+  }
+
   async findOne(userId: string, id: string): Promise<RecipeApiResponse> {
     const recipe = await this.prisma.recipes.findFirst({
       where: { id, ...this.visibilityWhere(userId) },
@@ -122,6 +275,160 @@ export class RecipesService {
     }
 
     return mapRecipeToApiResponse(recipe);
+  }
+
+  /**
+   * Compara quantidades da receita com a despensa do usuário.
+   * Unidade: a do cadastro do ingrediente (`ingredients.measure_units_id`), alinhada à linha em `ingredient_units`.
+   */
+  async getPantryComparison(
+    userId: string,
+    recipeId: string,
+  ): Promise<RecipePantryComparisonResponse> {
+    const recipe = await this.prisma.recipes.findFirst({
+      where: { id: recipeId, ...this.visibilityWhere(userId) },
+      select: {
+        id: true,
+        title: true,
+        recipeIngredients: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            ingredients: {
+              select: {
+                id: true,
+                name: true,
+                measureUnitsId: true,
+                measureUnits: {
+                  select: {
+                    id: true,
+                    name: true,
+                    abbreviation: true,
+                  },
+                },
+                ingredientUnits: {
+                  select: {
+                    id: true,
+                    measureUnitsId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!recipe) {
+      throw new NotFoundException('Receita não encontrada');
+    }
+
+    const ingredientIds = recipe.recipeIngredients.map(
+      (ri) => ri.ingredientId,
+    );
+    const userRows =
+      ingredientIds.length === 0
+        ? []
+        : await this.prisma.userIngredients.findMany({
+            where: { userId, ingredientId: { in: ingredientIds } },
+          });
+
+    const totalsByIngredient = new Map<string, number>();
+    const rawByIngredient = new Map<string, string[]>();
+    for (const row of userRows) {
+      const parsed = parseUserQuantityString(row.quantity);
+      const add = parsed.value ?? 0;
+      totalsByIngredient.set(
+        row.ingredientId,
+        (totalsByIngredient.get(row.ingredientId) ?? 0) + add,
+      );
+      const arr = rawByIngredient.get(row.ingredientId) ?? [];
+      arr.push(row.quantity);
+      rawByIngredient.set(row.ingredientId, arr);
+    }
+
+    const items: RecipePantryComparisonItem[] = [];
+    let linesWithStock = 0;
+    let linesSufficient = 0;
+
+    for (const ri of recipe.recipeIngredients) {
+      const ing = ri.ingredients;
+      const mu = ing.measureUnits;
+      const unitRow = ing.ingredientUnits.find(
+        (iu) => iu.measureUnitsId === ing.measureUnitsId,
+      );
+
+      const required = new Prisma.Decimal(ri.amount.toString());
+      const rowsForIng = userRows.filter((r) => r.ingredientId === ri.ingredientId);
+      const hasInPantry = rowsForIng.length > 0;
+
+      let parseError = false;
+      for (const r of rowsForIng) {
+        if (parseUserQuantityString(r.quantity).parseError) {
+          parseError = true;
+        }
+      }
+
+      const rawList = rawByIngredient.get(ri.ingredientId);
+      const userQuantityRaw =
+        rawList && rawList.length > 0
+          ? rawList.length === 1
+            ? rawList[0]
+            : rawList.join(' + ')
+          : null;
+
+      const userParsed = hasInPantry
+        ? (totalsByIngredient.get(ri.ingredientId) ?? 0)
+        : null;
+
+      const haveDec =
+        userParsed !== null && Number.isFinite(userParsed)
+          ? new Prisma.Decimal(userParsed)
+          : null;
+      const sufficient = haveDec !== null && haveDec.gte(required);
+      const shortage = sufficient
+        ? new Prisma.Decimal(0)
+        : required.minus(haveDec ?? new Prisma.Decimal(0));
+
+      if (hasInPantry) {
+        linesWithStock += 1;
+      }
+      if (sufficient) {
+        linesSufficient += 1;
+      }
+
+      items.push({
+        recipe_ingredient_id: ri.id,
+        ingredient_id: ing.id,
+        ingredient_name: ing.name,
+        measure_units_id: ing.measureUnitsId,
+        measure_unit: {
+          id: mu.id,
+          name: mu.name,
+          abbreviation: mu.abbreviation,
+        },
+        ingredient_unit_id: unitRow?.id ?? null,
+        required_amount: required.toString(),
+        user_quantity_raw: hasInPantry ? userQuantityRaw : null,
+        user_quantity_parsed: hasInPantry ? userParsed : null,
+        quantity_parse_error: hasInPantry ? parseError : false,
+        has_in_pantry: hasInPantry,
+        is_sufficient: sufficient,
+        shortage_amount: shortage.toString(),
+      });
+    }
+
+    return {
+      recipe_id: recipe.id,
+      title: recipe.title,
+      items,
+      summary: {
+        total_lines: items.length,
+        lines_with_stock: linesWithStock,
+        lines_sufficient: linesSufficient,
+        all_sufficient:
+          items.length > 0 && linesSufficient === items.length,
+      },
+    };
   }
 
   private async assertUserOwnsRecipe(userId: string, recipeId: string) {

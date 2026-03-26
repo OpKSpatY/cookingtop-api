@@ -7,11 +7,14 @@ import {
   Body,
   Param,
   Request,
+  Req,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import {
   ApiTags,
@@ -24,6 +27,9 @@ import { RecipesService } from './recipes.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
 import { UpdateRecipeDto } from './dto/update-recipe.dto';
 import { recipeWithStepsResponseExample } from './recipes-api-response.example';
+import { recipePantryComparisonExample } from './recipe-pantry-comparison.example';
+import { recipePantryAvailabilityExample } from './recipe-pantry-availability.example';
+import { isIfNoneMatchSatisfied } from '../common/utils/conditional-request.util';
 
 @ApiTags('recipes')
 @ApiBearerAuth()
@@ -62,6 +68,67 @@ export class RecipesController {
   @ApiResponse({ status: 401, description: 'Não autorizado' })
   async findAll(@Request() req: { user: { userId: string } }) {
     return this.recipesService.findAll(req.user.userId);
+  }
+
+  @Get('pantry-availability')
+  @ApiOperation({
+    summary:
+      'Listar receitas visíveis separadas em pode fazer / não pode fazer com a despensa atual',
+    description:
+      'Mesmo critério de `GET /recipes/:id/pantry-comparison`: soma de `user_ingredients` por ingrediente vs `recipe_ingredients.amount`. Receitas sem ingredientes vão em `can_make`.\n\n' +
+      '**Cache condicional:** resposta com header `ETag`. Envie `If-None-Match` com o valor recebido; se nada mudou, a API responde **304** sem corpo.',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      '`can_make` e `cannot_make`: arrays no formato de `GET /recipes`. Headers: `ETag`, `Cache-Control`, `Vary`.',
+    schema: { example: recipePantryAvailabilityExample },
+  })
+  @ApiResponse({
+    status: 304,
+    description:
+      'Não modificado — reutilize o payload em cache (corpo vazio). Reenvie o mesmo `If-None-Match` até receber 200.',
+  })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async findAllGroupedByPantry(
+    @Request() req: { user: { userId: string } },
+    @Req() reqHttp: ExpressRequest,
+    @Res({ passthrough: true }) res: ExpressResponse,
+  ) {
+    const userId = req.user.userId;
+    const etag = await this.recipesService.getPantryAvailabilityEtag(userId);
+    res.setHeader('ETag', etag);
+    res.setHeader('Cache-Control', 'private, no-cache');
+    res.setHeader('Vary', 'Authorization');
+
+    const inm = reqHttp.headers['if-none-match'];
+    if (isIfNoneMatchSatisfied(inm, etag)) {
+      res.status(HttpStatus.NOT_MODIFIED);
+      return;
+    }
+
+    return this.recipesService.findAllGroupedByPantry(userId);
+  }
+
+  @Get(':id/pantry-comparison')
+  @ApiOperation({
+    summary:
+      'Comparar ingredientes da receita com a despensa do usuário (quantidades na mesma unidade do ingrediente)',
+  })
+  @ApiParam({ name: 'id', description: 'UUID da receita' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Por linha: necessário vs quantidade na despensa, falta (`shortage_amount`) e resumo',
+    schema: { example: recipePantryComparisonExample },
+  })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  @ApiResponse({ status: 404, description: 'Receita não encontrada ou sem acesso' })
+  async getPantryComparison(
+    @Request() req: { user: { userId: string } },
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.recipesService.getPantryComparison(req.user.userId, id);
   }
 
   @Get(':id')

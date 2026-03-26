@@ -195,7 +195,8 @@ export const IngredientsScalarFieldEnum = {
   name: 'name',
   createdAt: 'createdAt',
   measureUnitsId: 'measureUnitsId',
-  imageUrl: 'imageUrl'
+  imageUrl: 'imageUrl',
+  updatedAt: 'updatedAt'
 } as const
 
 export type IngredientsScalarFieldEnum = (typeof IngredientsScalarFieldEnum)[keyof typeof IngredientsScalarFieldEnum]

@@ -153,6 +153,7 @@ model Ingredients {
   createdAt        DateTime       @default(now())  @map("created_at")
   measureUnitsId   String         @map("measure_units_id")
   imageUrl         String?         @map("image_url")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
 
   measureUnits      MeasureUnits   @relation(fields: [measureUnitsId], references: [id], onDelete: Cascade)
   nutrictionFacts   NutrictionFacts[]
