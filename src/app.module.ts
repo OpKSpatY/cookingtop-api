@@ -10,11 +10,13 @@ import { UserIngredientsModule } from './user-ingredients/user-ingredients.modul
 import { IngredientUnitsModule } from './ingredient-units/ingredient-units.module';
 import { RecipesModule } from './recipes/recipes.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { StorageModule } from './storage/storage.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
   imports: [
     PrismaModule,
+    StorageModule,
     ConfigModule.forRoot({ isGlobal: true }),
     UsersModule,
     AuthModule,

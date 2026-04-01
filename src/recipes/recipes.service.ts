@@ -24,6 +24,7 @@ import {
   parseUserQuantityString,
 } from './recipe-pantry.util';
 import { formatStrongEtag } from '../common/utils/conditional-request.util';
+import { SupabaseStorageService } from '../storage/supabase-storage.service';
 
 export type RecipePantryComparisonItem = {
   recipe_ingredient_id: string;
@@ -69,7 +70,10 @@ export type RecipesPantryAvailabilityResponse = {
 export class RecipesService {
   private readonly logger = new Logger(RecipesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly supabaseStorage: SupabaseStorageService,
+  ) {}
 
   /**
    * Receitas públicas ou receitas privadas cujo dono é o usuário.
@@ -546,6 +550,15 @@ export class RecipesService {
   async remove(userId: string, id: string): Promise<void> {
     await this.assertUserOwnsRecipe(userId, id);
 
+    const existing = await this.prisma.recipes.findUnique({
+      where: { id },
+      select: { imageUrl: true },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Receita não encontrada');
+    }
+
     try {
       await this.prisma.recipes.delete({
         where: { id },
@@ -556,5 +569,10 @@ export class RecipesService {
       }
       logAndRethrow(this.logger, `Erro ao excluir receita (id: ${id})`, error);
     }
+
+    await this.supabaseStorage.tryDeleteStoredRecipeImage(
+      existing.imageUrl,
+      userId,
+    );
   }
 }

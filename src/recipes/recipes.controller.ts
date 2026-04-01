@@ -10,10 +10,16 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import type { Request as ExpressRequest, Response as ExpressResponse } from 'express';
 import { AuthGuard } from '@nestjs/passport';
 import {
@@ -22,6 +28,8 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { RecipesService } from './recipes.service';
 import { CreateRecipeDto } from './dto/create-recipe.dto';
@@ -30,13 +38,17 @@ import { recipeWithStepsResponseExample } from './recipes-api-response.example';
 import { recipePantryComparisonExample } from './recipe-pantry-comparison.example';
 import { recipePantryAvailabilityExample } from './recipe-pantry-availability.example';
 import { isIfNoneMatchSatisfied } from '../common/utils/conditional-request.util';
+import { SupabaseStorageService } from '../storage/supabase-storage.service';
 
 @ApiTags('recipes')
 @ApiBearerAuth()
 @Controller('recipes')
 @UseGuards(AuthGuard('jwt'))
 export class RecipesController {
-  constructor(private readonly recipesService: RecipesService) {}
+  constructor(
+    private readonly recipesService: RecipesService,
+    private readonly storageService: SupabaseStorageService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -56,6 +68,80 @@ export class RecipesController {
     @Request() req: { user: { userId: string } },
     @Body() dto: CreateRecipeDto,
   ) {
+    return this.recipesService.create(req.user.userId, dto);
+  }
+
+  @Post('with-image')
+  @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor('image', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Criar receita com upload de imagem (multipart/form-data)',
+    description:
+      'Envie o campo `data` com o JSON da receita (mesmo formato de `POST /recipes`) ' +
+      'e o campo `image` com o arquivo da capa (jpeg, png ou webp, até 5 MB).',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'string',
+          description: 'JSON com os dados da receita (mesmo payload de POST /recipes)',
+        },
+        image: {
+          type: 'string',
+          format: 'binary',
+          description: 'Imagem de capa (jpeg, png ou webp, até 5 MB)',
+        },
+      },
+      required: ['data'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Receita criada com imagem enviada ao storage',
+    schema: { example: recipeWithStepsResponseExample },
+  })
+  @ApiResponse({ status: 400, description: 'Dados inválidos ou imagem fora do padrão' })
+  @ApiResponse({ status: 401, description: 'Não autorizado' })
+  async createWithImage(
+    @Request() req: { user: { userId: string } },
+    @Body('data') rawData: string,
+    @UploadedFile() image?: Express.Multer.File,
+  ) {
+    if (!rawData) {
+      throw new BadRequestException('O campo "data" (JSON da receita) é obrigatório');
+    }
+
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(rawData);
+    } catch {
+      throw new BadRequestException('O campo "data" não contém JSON válido');
+    }
+
+    const dto = plainToInstance(CreateRecipeDto, parsed);
+    const errors = await validate(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    });
+    if (errors.length > 0) {
+      const messages = errors.flatMap((e) =>
+        Object.values(e.constraints ?? {}),
+      );
+      throw new BadRequestException(messages);
+    }
+
+    if (image) {
+      dto.imageUrl = await this.storageService.uploadRecipeImage(
+        req.user.userId,
+        image,
+      );
+    }
+
     return this.recipesService.create(req.user.userId, dto);
   }
 
